@@ -2,6 +2,7 @@ import streamlit as st
 from modules.dashboard import show_dashboard
 from modules.invoice_processor import show_invoice_processor
 from modules.decision_agent import show_decision_agent
+from modules.chat_agent import show_chat
 
 st.set_page_config(
     page_title="Financial Ops AI",
@@ -10,7 +11,6 @@ st.set_page_config(
 )
 
 def show_home():
-    # Hero Section
     st.markdown("""
         <h1 style='text-align: center; font-size: 3em;'>💼 Financial Ops AI</h1>
         <p style='text-align: center; font-size: 1.3em; color: gray;'>
@@ -20,7 +20,6 @@ def show_home():
 
     st.markdown("---")
 
-    # Three feature cards
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -51,8 +50,6 @@ def show_home():
         """)
 
     st.markdown("---")
-
-    # Stats bar
     st.markdown("### 📈 System Overview")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Modules", "3")
@@ -63,12 +60,12 @@ def show_home():
     st.markdown("---")
     st.markdown("""
         <p style='text-align: center; color: gray;'>
-            Built with Python · Streamlit · Pandas · Plotly
+            Built with Python · Streamlit · Pandas · Plotly · Groq AI
         </p>
     """, unsafe_allow_html=True)
 
 
-# --- Sidebar Navigation ---
+# --- Sidebar ---
 st.sidebar.title("💼 Financial Ops AI")
 st.sidebar.markdown("---")
 page = st.sidebar.selectbox(
@@ -76,7 +73,7 @@ page = st.sidebar.selectbox(
     ["🏠 Home", "📊 Dashboard", "🧾 Invoice Processor", "🤖 Decision Agent"]
 )
 st.sidebar.markdown("---")
-st.sidebar.markdown("Built with Python + Streamlit")
+st.sidebar.markdown("Built with Python + Streamlit + Groq AI")
 
 # --- Page Routing ---
 if page == "🏠 Home":
@@ -87,3 +84,6 @@ elif page == "🧾 Invoice Processor":
     show_invoice_processor()
 elif page == "🤖 Decision Agent":
     show_decision_agent()
+
+# --- Chat appears on every page ---
+show_chat()
