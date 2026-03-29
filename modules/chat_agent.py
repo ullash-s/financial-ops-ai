@@ -16,18 +16,24 @@ def load_cases():
 def save_cases(df):
     df.to_csv(DATA_PATH, index=False)
 
-def get_ai_action(user_message, df):
+def get_ai_action(user_message, df, chat_history):
     """
-    Send user message + current data to AI.
-    AI returns a structured JSON action to execute.
-    This is the core of the conversational data interface.
+    Send full conversation history + current data to AI.
+    This gives the AI memory of previous messages.
+    
+    WHY THIS WORKS:
+    LLMs are stateless by nature — they don't remember anything.
+    The trick is we send the entire conversation every time.
+    The AI reads the history and understands context from it.
     """
-    # Give AI full context of current data
     cases_summary = df.to_string(index=False)
 
     system_prompt = f"""
 You are a data operations assistant for a financial asset recovery company.
 You help users manage their cases table through natural language.
+You have memory of the entire conversation — use it to understand context.
+For example if user says "update the case I just created" or "change its priority",
+look back in the conversation to find which case they mean.
 
 CURRENT CASES DATA:
 {cases_summary}
@@ -46,7 +52,7 @@ VALID FIELDS:
 You must respond with ONLY a valid JSON object — no explanation, no markdown.
 
 For CREATE action:
-{{"action": "create", "data": {{"case_id": "C016", "client_name": "...", "amount_owed": 0, "amount_recovered": 0, "status": "Open", "priority": "Medium", "assigned_agent": "...", "date_opened": "2024-01-01", "industry": "..."}}}}
+{{"action": "create", "data": {{"case_id": "C016", "client_name": "...", "amount_owed": 0, "amount_recovered": 0, "status": "Open", "priority": "Medium", "assigned_agent": "Unassigned", "date_opened": "2024-01-01", "industry": "..."}}}}
 
 For UPDATE action:
 {{"action": "update", "case_id": "C001", "field": "status", "value": "Resolved"}}
@@ -64,15 +70,28 @@ Rules:
 - For CREATE: auto-generate the next case_id based on existing ones
 - For missing fields in CREATE: use sensible defaults
 - For QUERY: answer directly from the data provided
+- Use conversation history to resolve references like "that case", "the one I just made", "its priority"
 - Always return valid JSON only
 """
 
+    # Build messages array with full history
+    # This is the key change — we include all previous messages
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # Add conversation history
+    for msg in chat_history:
+        if msg["role"] in ["user", "assistant"]:
+            messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+    
+    # Add current message
+    messages.append({"role": "user", "content": user_message})
+
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ],
+        messages=messages,
         temperature=0.1
     )
 
@@ -82,15 +101,11 @@ Rules:
 
 
 def execute_action(action_obj, df):
-    """
-    Execute the AI's recommended action on the DataFrame.
-    Returns (updated_df, success_message, error_message)
-    """
+    """Execute the AI's recommended action on the DataFrame."""
     action = action_obj.get("action")
 
     if action == "create":
         new_row = action_obj.get("data", {})
-        # Auto-generate case_id if not provided correctly
         existing_ids = df["case_id"].tolist()
         max_num = max([int(id[1:]) for id in existing_ids if id[1:].isdigit()])
         new_row["case_id"] = f"C{str(max_num + 1).zfill(3)}"
@@ -102,10 +117,8 @@ def execute_action(action_obj, df):
         case_id = action_obj.get("case_id")
         field   = action_obj.get("field")
         value   = action_obj.get("value")
-
         if case_id not in df["case_id"].values:
             return df, None, f"❌ Case {case_id} not found."
-
         df.loc[df["case_id"] == case_id, field] = value
         save_cases(df)
         return df, f"✅ Updated **{case_id}** — set **{field}** to **{value}**", None
@@ -119,33 +132,34 @@ def execute_action(action_obj, df):
         return df, f"✅ Deleted case **{case_id}**", None
 
     elif action in ["query", "clarify"]:
-        return df, action_obj.get("response", "Here is the information you requested."), None
+        return df, action_obj.get("response", "Here is what I found."), None
 
     else:
-        return df, None, "❌ I didn't understand that request. Please try again."
+        return df, None, "❌ I didn't understand that. Please try again."
 
 
 def show_chat():
-    """Floating chat UI rendered at the bottom of every page."""
+    """Chat UI with full conversation memory."""
 
     st.markdown("---")
     st.markdown("### 💬 AI Operations Assistant")
     st.markdown("Ask me to create, update, delete, or query cases in plain English.")
 
     # Initialize chat history in session state
+    # session_state persists across reruns within the same session
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Display chat history
+    # Display full conversation history
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
     # Chat input
-    user_input = st.chat_input("e.g. Create a new case for Tesla Inc, $45,000, High priority")
+    user_input = st.chat_input("Try: 'Create a case for SpaceX $80,000' then 'Update its priority to High'")
 
     if user_input:
-        # Show user message
+        # Add user message to history
         st.session_state.chat_history.append({
             "role": "user",
             "content": user_input
@@ -153,26 +167,24 @@ def show_chat():
         with st.chat_message("user"):
             st.markdown(user_input)
 
-        # Get AI response and execute
         with st.chat_message("assistant"):
             with st.spinner("🤖 Thinking..."):
                 try:
                     df = load_cases()
-                    action_obj = get_ai_action(user_input, df)
+                    # Pass full chat history to AI
+                    action_obj = get_ai_action(
+                        user_input,
+                        df,
+                        st.session_state.chat_history[:-1]  # exclude current message
+                    )
                     df, success, error = execute_action(action_obj, df)
 
-                    if success:
-                        st.markdown(success)
-                        st.session_state.chat_history.append({
-                            "role": "assistant",
-                            "content": success
-                        })
-                    if error:
-                        st.markdown(error)
-                        st.session_state.chat_history.append({
-                            "role": "assistant",
-                            "content": error
-                        })
+                    response_text = success or error or "Done."
+                    st.markdown(response_text)
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": response_text
+                    })
 
                 except Exception as e:
                     msg = f"❌ Something went wrong: {e}"
@@ -183,3 +195,9 @@ def show_chat():
                     })
 
         st.rerun()
+
+    # Add a clear chat button
+    if st.session_state.chat_history:
+        if st.button("🗑️ Clear Chat History"):
+            st.session_state.chat_history = []
+            st.rerun()
