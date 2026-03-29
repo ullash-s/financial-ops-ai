@@ -35,10 +35,10 @@ def show_home():
     with col2:
         st.markdown("### 🧾 Invoice Processor")
         st.markdown("""
-        - Upload plain text invoices
-        - Auto-extract key fields
-        - Client, amount, due date
-        - Instant structured output
+        - Upload PDF, image, or text invoices
+        - AI vision reads real photos of receipts
+        - Extracts client, amount, dates, status
+        - Powered by Groq Llama 4 Vision
         """)
 
     with col3:
