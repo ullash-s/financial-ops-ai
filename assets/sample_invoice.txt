@@ -1,0 +1,25 @@
+INVOICE
+
+Invoice Number: INV-2024-0042
+Date: March 15, 2024
+Due Date: April 15, 2024
+
+Bill To:
+  Bright Dental Associates
+  123 Main Street
+  Austin, TX 78701
+
+Services Rendered:
+  Debt Recovery Consultation     $3,500.00
+  Case Management Fee            $1,200.00
+  Legal Filing Support           $800.00
+
+Subtotal:                        $5,500.00
+Tax (8%):                        $440.00
+Total Amount Due:                $5,940.00
+
+Payment Status: Unpaid
+
+Please remit payment within 30 days.
+Thank you for your business.
+EOF

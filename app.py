@@ -1,5 +1,6 @@
 import streamlit as st
 from modules.dashboard import show_dashboard
+from modules.invoice_processor import show_invoice_processor
 
 st.set_page_config(
     page_title="Financial Ops AI",
@@ -10,7 +11,6 @@ st.set_page_config(
 st.title("💼 AI-Powered Financial Operations System")
 st.markdown("#### Intelligent back-office automation for asset recovery")
 
-# Navigation — we'll expand this as we add more modules
 page = st.sidebar.selectbox(
     "Navigate",
     ["📊 Dashboard", "🧾 Invoice Processor", "🤖 Decision Agent"]
@@ -18,5 +18,7 @@ page = st.sidebar.selectbox(
 
 if page == "📊 Dashboard":
     show_dashboard()
+elif page == "🧾 Invoice Processor":
+    show_invoice_processor()
 else:
-    st.info("🚧 This module is coming soon.")
+    st.info("🚧 Decision Agent coming soon.")
