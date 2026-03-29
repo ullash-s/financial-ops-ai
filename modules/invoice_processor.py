@@ -1,32 +1,58 @@
 import streamlit as st
-import re
 import pandas as pd
+import json
+import os
+from groq import Groq
+from dotenv import load_dotenv
 
-def extract_invoice_fields(text):
-    def find(pattern, text, default="Not Found"):
-        match = re.search(pattern, text, re.IGNORECASE)
-        return match.group(1).strip() if match else default
+# Load API key from .env file
+load_dotenv()
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    invoice_number = find(r"Invoice Number[:\s]+([A-Z0-9\-]+)", text)
-    invoice_date   = find(r"Date[:\s]+([\w]+ \d{1,2},? \d{4})", text)
-    due_date       = find(r"Due Date[:\s]+([\w]+ \d{1,2},? \d{4})", text)
-    client_name    = find(r"Bill To:\s*\n\s*(.+)", text)
-    total_amount   = find(r"Total Amount Due[:\s]+\$?([\d,]+\.?\d*)", text)
-    payment_status = find(r"Payment Status[:\s]+(\w+)", text)
+def extract_with_ai(text):
+    """
+    Uses Groq (Llama 3) to extract invoice fields from unstructured text.
+    This is real AI — send raw text, get structured data back.
+    No hardcoded patterns. Works on any invoice format.
+    """
 
-    return {
-        "Invoice Number": invoice_number,
-        "Client Name":    client_name,
-        "Invoice Date":   invoice_date,
-        "Due Date":       due_date,
-        "Total Amount":   f"${total_amount}" if total_amount != "Not Found" else "Not Found",
-        "Payment Status": payment_status,
-    }
+    prompt = f"""
+    You are an invoice processing assistant.
+    Extract the following fields from the invoice text below.
+    
+    Return ONLY a valid JSON object with these exact keys:
+    - invoice_number
+    - client_name
+    - invoice_date
+    - due_date
+    - total_amount
+    - payment_status
+    
+    If a field is not found, use "Not Found" as the value.
+    Do not include any explanation or markdown — just the raw JSON.
+    
+    Invoice Text:
+    {text}
+    """
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",   # Free, fast Llama 3 model on Groq
+        messages=[
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.1   # Low temperature = more consistent, predictable output
+    )
+
+    raw = response.choices[0].message.content.strip()
+    # Remove markdown code blocks if model adds them
+    raw = raw.replace("```json", "").replace("```", "").strip()
+
+    return json.loads(raw)
 
 
 def show_invoice_processor():
     st.header("🧾 Invoice Processing System")
-    st.markdown("Upload a plain text invoice to extract structured data automatically.")
+    st.markdown("Upload a plain text invoice — AI extracts the key fields automatically.")
 
     tab1, tab2 = st.tabs(["📁 Upload Invoice", "🧪 Try Sample Invoice"])
 
@@ -43,25 +69,40 @@ def show_invoice_processor():
 
             st.text_area("Sample Invoice Text", sample_text, height=300)
 
-            if st.button("⚙️ Extract Invoice Data"):
+            if st.button("🤖 Extract with AI"):
                 process_and_display(sample_text)
+
         except FileNotFoundError:
             st.error("Sample invoice file not found.")
 
 
 def process_and_display(text):
-    with st.spinner("Extracting invoice fields..."):
-        fields = extract_invoice_fields(text)
+    """Send text to Groq and display extracted fields."""
 
-    st.success("✅ Extraction complete!")
+    with st.spinner("🤖 AI is reading the invoice..."):
+        try:
+            fields = extract_with_ai(text)
+        except Exception as e:
+            st.error(f"AI extraction failed: {e}")
+            return
 
+    st.success("✅ AI extraction complete!")
+
+    # Show key metrics
     col1, col2, col3 = st.columns(3)
-    col1.metric("Client", fields["Client Name"])
-    col2.metric("Total Amount", fields["Total Amount"])
-    col3.metric("Status", fields["Payment Status"])
+    col1.metric("Client",       fields.get("client_name",    "Not Found"))
+    col2.metric("Total Amount", fields.get("total_amount",   "Not Found"))
+    col3.metric("Status",       fields.get("payment_status", "Not Found"))
 
     st.divider()
 
+    # Show all fields in a clean table
     st.subheader("📋 All Extracted Fields")
     df = pd.DataFrame(fields.items(), columns=["Field", "Value"])
     st.dataframe(df, use_container_width=True)
+
+    st.divider()
+
+    # Show raw AI response for transparency
+    with st.expander("🔍 View Raw AI Response"):
+        st.json(fields)
