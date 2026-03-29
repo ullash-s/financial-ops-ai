@@ -1,6 +1,7 @@
 import streamlit as st
 from modules.dashboard import show_dashboard
 from modules.invoice_processor import show_invoice_processor
+from modules.decision_agent import show_decision_agent
 
 st.set_page_config(
     page_title="Financial Ops AI",
@@ -20,5 +21,5 @@ if page == "📊 Dashboard":
     show_dashboard()
 elif page == "🧾 Invoice Processor":
     show_invoice_processor()
-else:
-    st.info("🚧 Decision Agent coming soon.")
+elif page == "🤖 Decision Agent":
+    show_decision_agent()
