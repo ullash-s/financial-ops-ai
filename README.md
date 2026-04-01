@@ -59,7 +59,7 @@ streamlit run app.py
 
 ### Option 2: Local Setup
 ```bash
-git clone https://github.com/YOUR_USERNAME/financial-ops-ai.git
+git clone https://github.com/ullash-s/financial-ops-ai.git
 cd financial-ops-ai
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
